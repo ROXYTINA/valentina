@@ -1,0 +1,25 @@
+{
+  "name": "pulse-player",
+  "productName": "Pulse",
+  "version": "1.0.0",
+  "description": "A free local music player with synced lyrics",
+  "main": "main.js",
+  "author": "You",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.example.pulse",
+    "productName": "Pulse",
+    "files": ["main.js", "index.html", "package.json"],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg", "category": "public.app-category.music" },
+    "linux": { "target": "AppImage", "category": "Audio" }
+  }
+}
