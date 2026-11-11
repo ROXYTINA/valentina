@@ -1,4 +1,4 @@
-# Pulse desktop app
+# Valentina. Your local music player
 
 1. Install Node.js (LTS) from https://nodejs.org
 2. In this folder run:
