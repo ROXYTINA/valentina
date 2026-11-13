@@ -75,6 +75,12 @@
     #pop button{display:block;width:100%;text-align:left;padding:8px 10px}
     #pop button:hover{background:var(--panel)}
     #toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:9px 16px;border-radius:999px;font-weight:600;display:none}
+    #plDlg{position:fixed;inset:0;background:#0008;display:none;place-items:center;z-index:15}
+    #plDlg.on{display:grid}
+    .plbox{width:min(360px,calc(100% - 32px));background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 12px 40px #0008}
+    .plbox h2{font-size:20px;margin-bottom:14px}
+    .plbox input{width:100%;background:var(--raise);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+    .placts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
     @media (max-width:760px){body{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;grid-template-areas:"side" "main" "bar"}aside{flex-direction:row;overflow-x:auto;padding:10px;align-items:center}.logo{padding:0 8px}.sec{display:none}.nav{width:auto;white-space:nowrap}main{padding:18px}footer{grid-template-columns:1fr;gap:8px}.vol{display:none}.row{grid-template-columns:28px 40px 1fr 46px 30px}}
   </style>
 </head>
@@ -104,6 +110,13 @@
 </footer>
 
 <section id="ly" aria-label="Lyrics"></section><div id="pop"></div><div id="toast"></div>
+<section id="plDlg" aria-label="Create playlist" role="dialog" aria-modal="true">
+  <form class="plbox" id="plForm">
+    <h2>New playlist</h2>
+    <input id="plName" type="text" maxlength="80" placeholder="Playlist name" autocomplete="off">
+    <div class="placts"><button type="button" class="btn alt" id="plCancel">Cancel</button><button type="submit" class="btn">Create</button></div>
+  </form>
+</section>
 <input type="file" id="files" accept="audio/*,.lrc,.txt" multiple hidden>
 <input type="file" id="folder" webkitdirectory multiple hidden>
 <audio id="au" preload="metadata"></audio>
@@ -200,7 +213,7 @@
     let h=`<div class="head"><h1>${isPl?esc(view):'Your library'}<small>${l.length} song${l.length==1?'':'s'}${total?' · '+Math.round(total/60)+' min':''}</small></h1>
   <input type="search" id="q" placeholder="Search songs or artists" value="${esc(q)}" aria-label="Search">
   ${l.length?'<button class="btn" id="playAll">Play</button>':''}
-  ${isPl?'<button class="btn alt" id="delPl">Delete playlist</button>':'<button class="btn alt" id="addF">Add songs</button><button class="btn alt" id="addD">Add folder</button>'+(D?'<button class="btn alt" id="openS">Songs folder</button><button class="btn alt" id="showLogs">Show logs</button>':'')}</div>`;
+  ${isPl?'<button class="btn alt" id="delPl">Delete playlist</button>':'<button class="btn alt" id="newPlMain">New playlist</button><button class="btn alt" id="addF">Add songs</button><button class="btn alt" id="addD">Add folder</button>'+(D?'<button class="btn alt" id="openS">Songs folder</button><button class="btn alt" id="showLogs">Show logs</button>':'')}</div>`;
     if(!l.length){
       h+=isPl&&!q?`<div class="empty"><b>This playlist is empty</b>Use the ⋯ button on any song in your library to add it here.</div>`
               :q?`<div class="empty"><b>No matches</b>Try a different search.</div>`
@@ -348,11 +361,32 @@
   /* ---------- interactions ---------- */
   const pop=$('#pop');
   function menu(x,y,items){pop.innerHTML=items.map((i,k)=>`<button data-k="${k}">${esc(i[0])}</button>`).join('');pop.style.display='block';pop.style.left=Math.min(x,innerWidth-210)+'px';pop.style.top=Math.min(y,innerHeight-40-items.length*36)+'px';pop._i=items}
+  const closePlaylistMenu=()=>{pop.style.display='none';pop._i=null};
   pop.onclick=e=>{const k=e.target.dataset.k;if(k!=null){pop._i[k][1]();pop.style.display='none'}};
   document.addEventListener('click',e=>{if(!e.target.closest('#pop,.more'))pop.style.display='none'});
 
-  function newPlaylist(){const n=(prompt('Playlist name')||'').trim();if(!n)return null;if(pls[n]){toast('That name is taken');return null}pls[n]=[];savePls();render();return n}
-  $('#newPl').onclick=()=>{const n=newPlaylist();if(n){view=n;render()}};
+  let playlistAfterCreate=null;
+  function closePlaylistDialog(){playlistAfterCreate=null;$('#plDlg').classList.remove('on');$('#plName').value=''}
+  function openPlaylistDialog(afterCreate=null){
+    playlistAfterCreate=afterCreate;$('#plDlg').classList.add('on');$('#plName').focus()
+  }
+  function createPlaylist(){openPlaylistDialog()}
+  $('#newPl').onclick=createPlaylist;
+  $('#plCancel').onclick=closePlaylistDialog;
+  $('#plDlg').onclick=e=>{if(e.target.id==='plDlg')closePlaylistDialog()};
+  $('#plForm').onsubmit=e=>{
+    e.preventDefault();
+    const n=$('#plName').value.trim();
+    if(!n){toast('Enter a playlist name');$('#plName').focus();return}
+    if(Object.prototype.hasOwnProperty.call(pls,n)){toast('That name is taken');return}
+    pls[n]=[];
+    const addId=playlistAfterCreate;
+    savePls();closePlaylistDialog();
+    if(addId)pls[n].push(addId);
+    if(addId)savePls();
+    view=n;render();
+    toast(addId?'Playlist created and song added':'Playlist created');
+  };
 
   let draggedId='';
   let dragMoved=false;
@@ -405,8 +439,8 @@
     const nav=e.target.closest('.nav');if(nav){view=nav.dataset.v;q='';render();return}
     const m=e.target.closest('.more');
     if(m){const id=m.dataset.m,r=m.getBoundingClientRect(),items=[];
-      Object.keys(pls).forEach(n=>items.push([`Add to ${n}`,()=>{if(!pls[n].includes(id)){pls[n].push(id);savePls();render()}toast(`Added to ${n}`)}]));
-      items.push(['New playlist…',()=>{const n=newPlaylist();if(n){pls[n].push(id);savePls();render();toast(`Added to ${n}`)}}]);
+      Object.keys(pls).forEach(n=>items.push([`Add to ${n}`,()=>{if(pls[n].includes(id)){toast('Song is already in this playlist');return}pls[n].push(id);savePls();render();toast(`Added to ${n}`)}]));
+      items.push(['New playlist…',()=>{closePlaylistMenu();openPlaylistDialog(id)}]);
       if(view!=='lib')items.push(['Remove from this playlist',()=>{pls[view]=pls[view].filter(x=>x!==id);savePls();render()}]);
       else items.push(['Delete from library',async()=>{const tt=tracks.find(t=>t.id===id);if(tt&&tt.auto){toast('This song is in the songs folder. Delete its file there to remove it.');return}tracks=tracks.filter(t=>t.id!==id);Object.keys(pls).forEach(n=>pls[n]=pls[n].filter(x=>x!==id));savePls();await tx('readwrite',s=>s.delete(id));render()}]);
       menu(r.left-150,r.bottom,items);return}
@@ -414,6 +448,7 @@
     const id=e.target.id;
     if(id==='addF')$('#files').click();
     if(id==='addD')$('#folder').click();
+    if(id==='newPlMain')createPlaylist();
     if(id==='openS')D.openSongs();
     if(id==='showLogs'){
       const l=await D.getLogs();let o=$('#logBox');
