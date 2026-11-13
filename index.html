@@ -30,6 +30,8 @@
     .row{display:grid;grid-template-columns:36px 44px 1fr 56px 34px;gap:12px;align-items:center;padding:7px 10px;border-radius:10px}
     .row:hover{background:var(--panel)}
     .row.cur{background:var(--raise)}
+    .row.dragging{opacity:.45}
+    .row.drop-target{outline:2px solid var(--accent);outline-offset:-2px}
     .row.cur .t{color:var(--accent)}
     .n{color:var(--mute);text-align:center;font-variant-numeric:tabular-nums}
     .art{width:44px;height:44px;border-radius:8px;flex:none}
@@ -203,7 +205,7 @@
       h+=isPl&&!q?`<div class="empty"><b>This playlist is empty</b>Use the ⋯ button on any song in your library to add it here.</div>`
               :q?`<div class="empty"><b>No matches</b>Try a different search.</div>`
                       :`<div class="empty"><b>Drop your music here</b>Drag in audio files (mp3, m4a, flac, wav, ogg) or use Add songs. Everything stays on your computer.${D?' You can also copy music into the songs folder and it appears automatically.':''}</div>`;
-    }else h+=l.map((t,i)=>`<div class="row ${queue[qi]===t.id?'cur':''}" data-id="${t.id}" tabindex="0"><span class="n">${i+1}</span><div class="art" style="background:${art(t)}"></div><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="a">${esc(t.artist)}${fl(t)?` – ♪ ${esc(fl(t))}`:''}</div></div><span class="d">${fmt(t.dur)}</span><button class="more" data-m="${t.id}" aria-label="More options">⋯</button></div>`).join('');
+    }else h+=l.map((t,i)=>`<div class="row ${queue[qi]===t.id?'cur':''}" data-id="${t.id}" draggable="true" tabindex="0"><span class="n">${i+1}</span><div class="art" style="background:${art(t)}"></div><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="a">${esc(t.artist)}${fl(t)?` – ♪ ${esc(fl(t))}`:''}</div></div><span class="d">${fmt(t.dur)}</span><button class="more" data-m="${t.id}" aria-label="More options">⋯</button></div>`).join('');
     const sc=$('#main').scrollTop, hadQ=document.activeElement&&document.activeElement.id==='q';
     $('#main').innerHTML=h;$('#main').scrollTop=sc;
     if(hadQ){const e=$('#q');e.focus();e.setSelectionRange(q.length,q.length)}
@@ -352,6 +354,53 @@
   function newPlaylist(){const n=(prompt('Playlist name')||'').trim();if(!n)return null;if(pls[n]){toast('That name is taken');return null}pls[n]=[];savePls();render();return n}
   $('#newPl').onclick=()=>{const n=newPlaylist();if(n){view=n;render()}};
 
+  let draggedId='';
+  let dragMoved=false;
+  async function persistOrder(){
+    if(D){saveLib();return}
+    await Promise.all(tracks.map(t=>tx('readwrite',s=>s.put(t))));
+  }
+  function reorderSongs(fromId,toId){
+    if(!fromId||!toId||fromId===toId)return false;
+    const visible=shown(), ids=visible.map(t=>t.id), from=ids.indexOf(fromId), to=ids.indexOf(toId);
+    if(from<0||to<0)return false;
+    ids.splice(from,1);ids.splice(to,0,fromId);
+    if(view!=='lib'){
+      const ordered=[...pls[view]], sourceFrom=ordered.indexOf(fromId);
+      ordered.splice(sourceFrom,1);
+      ordered.splice(ordered.indexOf(toId),0,fromId);
+      pls[view]=ordered;
+    }else{
+      const positions=new Map(ids.map((id,i)=>[id,i]));
+      const ordered=tracks.filter(t=>positions.has(t.id)).sort((a,b)=>positions.get(a.id)-positions.get(b.id));
+      let i=0;
+      tracks=tracks.map(t=>positions.has(t.id)?ordered[i++]:t);
+    }
+    return true;
+  }
+  document.addEventListener('dragstart',e=>{
+    const row=e.target.closest('.row');if(!row)return;
+    draggedId=row.dataset.id;dragMoved=false;row.classList.add('dragging');
+    e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',draggedId);
+  });
+  document.addEventListener('dragover',e=>{
+    const row=e.target.closest('.row');if(!row||!draggedId||row.dataset.id===draggedId)return;
+    e.preventDefault();e.dataTransfer.dropEffect='move';
+    document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));
+    row.classList.add('drop-target');
+  });
+  document.addEventListener('drop',async e=>{
+    const row=e.target.closest('.row');if(!row||!draggedId)return;
+    e.preventDefault();dragMoved=reorderSongs(draggedId,row.dataset.id);
+    if(dragMoved){if(view!=='lib')savePls();else await persistOrder();render()}
+  });
+  document.addEventListener('dragend',e=>{
+    e.target.closest('.row')?.classList.remove('dragging');
+    document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));
+    draggedId='';
+    dragMoved=false;
+  });
+
   document.addEventListener('click',async e=>{
     const nav=e.target.closest('.nav');if(nav){view=nav.dataset.v;q='';render();return}
     const m=e.target.closest('.more');
@@ -361,7 +410,7 @@
       if(view!=='lib')items.push(['Remove from this playlist',()=>{pls[view]=pls[view].filter(x=>x!==id);savePls();render()}]);
       else items.push(['Delete from library',async()=>{const tt=tracks.find(t=>t.id===id);if(tt&&tt.auto){toast('This song is in the songs folder. Delete its file there to remove it.');return}tracks=tracks.filter(t=>t.id!==id);Object.keys(pls).forEach(n=>pls[n]=pls[n].filter(x=>x!==id));savePls();await tx('readwrite',s=>s.delete(id));render()}]);
       menu(r.left-150,r.bottom,items);return}
-    const row=e.target.closest('.row');if(row){startQueue(shown().map(t=>t.id),row.dataset.id);return}
+    const row=e.target.closest('.row');if(row){if(dragMoved){dragMoved=false;return}startQueue(shown().map(t=>t.id),row.dataset.id);return}
     const id=e.target.id;
     if(id==='addF')$('#files').click();
     if(id==='addD')$('#folder').click();
@@ -390,7 +439,6 @@
 
   /* ---------- songs folder (desktop app) ---------- */
   let syncing=false;
-  const sortTracks=()=>tracks.sort((a,b)=>a.artist.localeCompare(b.artist)||a.title.localeCompare(b.title));
   async function syncFolder(){
     if(!D||syncing)return;syncing=true;
     log('[DEBUG_LOG] Starting syncFolder');
@@ -412,7 +460,7 @@
       }
       if(changed){
         log('[DEBUG_LOG] Library changed, rendering. Total tracks:', tracks.length);
-        sortTracks();saveLib();render();renderLyrics();
+        saveLib();render();renderLyrics();
       }
     }catch(e){
       log('[DEBUG_LOG] syncFolder error:', e);
@@ -433,7 +481,6 @@
       log('[DEBUG_LOG] Booting web');
       tracks=(await tx('readonly',s=>s.getAll()))||[];
     }
-    sortTracks();
     render();
     syncFolder()
   })();
