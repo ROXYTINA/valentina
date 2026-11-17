@@ -114,7 +114,8 @@ function createWindow() {
     height: 760,
     minWidth: 720,
     minHeight: 520,
-    title: 'Pulse',
+    title: 'Valentina',
+    icon: path.join(__dirname, 'assets', 'logo.png'),
     backgroundColor: '#171021',
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }

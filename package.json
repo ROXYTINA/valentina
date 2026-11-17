@@ -1,6 +1,6 @@
 {
-  "name": "pulse-player",
-  "productName": "Pulse",
+  "name": "valentina",
+  "productName": "Valentina",
   "version": "1.0.0",
   "description": "A free local music player with synced lyrics",
   "main": "main.js",
@@ -15,11 +15,11 @@
     "electron-builder": "^25.0.0"
   },
   "build": {
-    "appId": "com.example.pulse",
-    "productName": "Pulse",
-    "files": ["main.js", "index.html", "package.json"],
-    "win": { "target": "nsis" },
-    "mac": { "target": "dmg", "category": "public.app-category.music" },
-    "linux": { "target": "AppImage", "category": "Audio" }
+    "appId": "com.example.valentina",
+    "productName": "Valentina",
+    "files": ["main.js", "preload.js", "index.html", "package.json", "assets/**/*"],
+    "win": { "target": "nsis", "icon": "assets/logo.png" },
+    "mac": { "target": "dmg", "category": "public.app-category.music", "icon": "assets/logo.png" },
+    "linux": { "target": "AppImage", "category": "Audio", "icon": "assets/logo.png" }
   }
 }

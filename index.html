@@ -81,6 +81,21 @@
     .plbox h2{font-size:20px;margin-bottom:14px}
     .plbox input{width:100%;background:var(--raise);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
     .placts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+    #editDlg{position:fixed;inset:0;background:#0008;display:none;place-items:center;z-index:15}
+    #editDlg.on{display:grid}
+    .editbox{width:min(400px,calc(100% - 32px));background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 12px 40px #0008;display:flex;flex-direction:column;gap:12px}
+    .editbox h2{font-size:20px}
+    .edit-cover-wrap{display:flex;align-items:center;gap:14px}
+    .edit-cover{width:80px;height:80px;border-radius:12px;flex:none;cursor:pointer;border:2px dashed var(--line);display:grid;place-items:center;overflow:hidden;position:relative}
+    .edit-cover:hover{border-color:var(--accent)}
+    .edit-cover-btns{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+    .edit-cover-btns .btn{padding:6px 12px;font-size:13px}
+    .editbox label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute)}
+    .editbox input[type=text]{width:100%;background:var(--raise);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:15px}
+    #splash{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:100;pointer-events:none;animation:splashFade 1.5s ease-in-out forwards}
+    #splash img{width:140px;height:140px;object-fit:contain;filter:drop-shadow(0 16px 32px #0008);animation:splashPop .55s cubic-bezier(.22,1,.36,1) forwards}
+    @keyframes splashPop{0%{opacity:0;transform:scale(.6)}100%{opacity:1;transform:scale(1)}}
+    @keyframes splashFade{0%,65%{opacity:1}100%{opacity:0;visibility:hidden}}
     @media (max-width:760px){body{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;grid-template-areas:"side" "main" "bar"}aside{flex-direction:row;overflow-x:auto;padding:10px;align-items:center}.logo{padding:0 8px}.sec{display:none}.nav{width:auto;white-space:nowrap}main{padding:18px}footer{grid-template-columns:1fr;gap:8px}.vol{display:none}.row{grid-template-columns:28px 40px 1fr 46px 30px}}
   </style>
 </head>
@@ -117,6 +132,23 @@
     <div class="placts"><button type="button" class="btn alt" id="plCancel">Cancel</button><button type="submit" class="btn">Create</button></div>
   </form>
 </section>
+<section id="editDlg" aria-label="Edit song" role="dialog" aria-modal="true">
+  <form class="editbox" id="editForm">
+    <h2>Edit song</h2>
+    <div class="edit-cover-wrap">
+      <div class="edit-cover" id="editCover" title="Click to upload picture"></div>
+      <div class="edit-cover-btns">
+        <button type="button" class="btn alt" id="editPicBtn">Upload picture</button>
+        <button type="button" class="btn alt" id="editPicRm" style="display:none">Remove picture</button>
+      </div>
+    </div>
+    <label>Song title<input id="editTitle" type="text" maxlength="160" required autocomplete="off"></label>
+    <label>Artist<input id="editArtist" type="text" maxlength="160" required autocomplete="off"></label>
+    <div class="placts"><button type="button" class="btn alt" id="editCancel">Cancel</button><button type="submit" class="btn">Save</button></div>
+  </form>
+</section>
+<div id="splash" aria-hidden="true"><img src="assets/logo.png" alt="Valentina"></div>
+<input type="file" id="coverFile" accept="image/*" hidden>
 <input type="file" id="files" accept="audio/*,.lrc,.txt" multiple hidden>
 <input type="file" id="folder" webkitdirectory multiple hidden>
 <audio id="au" preload="metadata"></audio>
@@ -125,8 +157,8 @@
   const $=s=>document.querySelector(s), au=$('#au');
   const log=(...args)=>D?D.log(...args):console.log(...args);
   let tracks=[], pls={}, view='lib', q='', queue=[], qi=-1, shuffle=false, repeat=0, urls={}, seeking=false;
-  try{pls=JSON.parse(localStorage.getItem('pulse-pls')||'{}')}catch(e){}
-  const savePls=()=>{if(window.desktop)saveLib();try{localStorage.setItem('pulse-pls',JSON.stringify(pls))}catch(e){}};
+  try{pls=JSON.parse(localStorage.getItem('valentina-pls')||localStorage.getItem('pulse-pls')||'{}')}catch(e){}
+  const savePls=()=>{if(window.desktop)saveLib();try{localStorage.setItem('valentina-pls',JSON.stringify(pls))}catch(e){}};
 
   /* ---------- storage (IndexedDB keeps your songs between sessions) ---------- */
   const D=window.desktop; // set by the desktop app's preload script
@@ -141,6 +173,7 @@
   const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const hue=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h};
   const art=t=>{const h=hue(t.title+t.artist);return `linear-gradient(135deg,hsl(${h} 70% 55%),hsl(${(h+60)%360} 65% 35%))`};
+  const artBg=t=>t&&t.picture?`url('${t.picture.replace(/'/g,"\\'")}') center/cover no-repeat`:art(t);
   const toast=m=>{const e=$('#toast');e.textContent=m;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2200)};
   const MIME={mp3:'audio/mpeg',m4a:'audio/mp4',aac:'audio/aac',flac:'audio/flac',wav:'audio/wav',ogg:'audio/ogg',opus:'audio/ogg'};
   const fileBlob=async t=>new Blob([await D.read(t.path)],{type:MIME[(t.path.split('.').pop()||'').toLowerCase()]||'audio/mpeg'});
@@ -218,7 +251,7 @@
       h+=isPl&&!q?`<div class="empty"><b>This playlist is empty</b>Use the ⋯ button on any song in your library to add it here.</div>`
               :q?`<div class="empty"><b>No matches</b>Try a different search.</div>`
                       :`<div class="empty"><b>Drop your music here</b>Drag in audio files (mp3, m4a, flac, wav, ogg) or use Add songs. Everything stays on your computer.${D?' You can also copy music into the songs folder and it appears automatically.':''}</div>`;
-    }else h+=l.map((t,i)=>`<div class="row ${queue[qi]===t.id?'cur':''}" data-id="${t.id}" draggable="true" tabindex="0"><span class="n">${i+1}</span><div class="art" style="background:${art(t)}"></div><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="a">${esc(t.artist)}${fl(t)?` – ♪ ${esc(fl(t))}`:''}</div></div><span class="d">${fmt(t.dur)}</span><button class="more" data-m="${t.id}" aria-label="More options">⋯</button></div>`).join('');
+    }else h+=l.map((t,i)=>`<div class="row ${queue[qi]===t.id?'cur':''}" data-id="${t.id}" draggable="true" tabindex="0"><span class="n">${i+1}</span><div class="art" style="background:${artBg(t)}"></div><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="a">${esc(t.artist)}${fl(t)?` – ♪ ${esc(fl(t))}`:''}</div></div><span class="d">${fmt(t.dur)}</span><button class="more" data-m="${t.id}" aria-label="More options">⋯</button></div>`).join('');
     const sc=$('#main').scrollTop, hadQ=document.activeElement&&document.activeElement.id==='q';
     $('#main').innerHTML=h;$('#main').scrollTop=sc;
     if(hadQ){const e=$('#q');e.focus();e.setSelectionRange(q.length,q.length)}
@@ -234,8 +267,8 @@
   async function load(){
     const t=tracks.find(x=>x.id===queue[qi]);if(!t)return;
     const tok=++loadTok;
-    $('#nT').textContent=t.title;$('#nA').textContent=t.artist;$('#nArt').style.background=art(t);
-    document.title=`${t.title} · Pulse`;
+    $('#nT').textContent=t.title;$('#nA').textContent=t.artist;$('#nArt').style.background=artBg(t);
+    document.title=`${t.title} · Valentina`;
     if('mediaSession' in navigator)navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.artist});
     render();lastLine=-2;renderLyrics();
     let src;
@@ -365,6 +398,55 @@
   pop.onclick=e=>{const k=e.target.dataset.k;if(k!=null){pop._i[k][1]();pop.style.display='none'}};
   document.addEventListener('click',e=>{if(!e.target.closest('#pop,.more'))pop.style.display='none'});
 
+  let editTrack=null, editPic=null;
+  function updateEditCover(){
+    const t=editTrack||{title:$('#editTitle').value,artist:$('#editArtist').value};
+    $('#editCover').style.background=editPic?`url("${editPic.replace(/"/g,'\\"')}") center/cover no-repeat`:art(t);
+    $('#editPicRm').style.display=editPic?'':'none';
+  }
+  function openEditDialog(id){
+    const t=tracks.find(x=>x.id===id);if(!t)return;
+    editTrack=t;editPic=t.picture||null;
+    $('#editTitle').value=t.title;$('#editArtist').value=t.artist;
+    updateEditCover();
+    $('#editDlg').classList.add('on');$('#editTitle').focus();
+  }
+  function closeEditDialog(){editTrack=null;editPic=null;$('#editDlg').classList.remove('on')}
+  $('#editCancel').onclick=closeEditDialog;
+  $('#editDlg').onclick=e=>{if(e.target.id==='editDlg')closeEditDialog()};
+  $('#editCover').onclick=()=>$('#coverFile').click();
+  $('#editPicBtn').onclick=()=>$('#coverFile').click();
+  $('#editPicRm').onclick=()=>{editPic=null;updateEditCover()};
+  $('#coverFile').onchange=e=>{
+    const f=e.target.files[0];e.target.value='';if(!f)return;
+    const img=new Image(),u=URL.createObjectURL(f);
+    img.onload=()=>{
+      const max=512,s=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      editPic=c.toDataURL('image/jpeg',0.85);
+      URL.revokeObjectURL(u);updateEditCover();
+    };
+    img.onerror=()=>{URL.revokeObjectURL(u);toast('Could not load image')};
+    img.src=u;
+  };
+  $('#editForm').onsubmit=async e=>{
+    e.preventDefault();if(!editTrack)return;
+    const title=$('#editTitle').value.trim(), artist=$('#editArtist').value.trim();
+    if(!title||!artist){toast('Title and artist are required');return}
+    editTrack.title=title;editTrack.artist=artist;
+    if(editPic)editTrack.picture=editPic;else delete editTrack.picture;
+    await tx('readwrite',s=>s.put(editTrack));
+    if(queue[qi]===editTrack.id){
+      $('#nT').textContent=editTrack.title;$('#nA').textContent=editTrack.artist;
+      $('#nArt').style.background=artBg(editTrack);
+      document.title=`${editTrack.title} · Valentina`;
+      if('mediaSession' in navigator)navigator.mediaSession.metadata=new MediaMetadata({title:editTrack.title,artist:editTrack.artist});
+    }
+    closeEditDialog();render();renderLyrics();
+    toast('Song updated');
+  };
+
   let playlistAfterCreate=null;
   function closePlaylistDialog(){playlistAfterCreate=null;$('#plDlg').classList.remove('on');$('#plName').value=''}
   function openPlaylistDialog(afterCreate=null){
@@ -439,6 +521,7 @@
     const nav=e.target.closest('.nav');if(nav){view=nav.dataset.v;q='';render();return}
     const m=e.target.closest('.more');
     if(m){const id=m.dataset.m,r=m.getBoundingClientRect(),items=[];
+      items.push(['Edit song info',()=>openEditDialog(id)]);
       Object.keys(pls).forEach(n=>items.push([`Add to ${n}`,()=>{if(pls[n].includes(id)){toast('Song is already in this playlist');return}pls[n].push(id);savePls();render();toast(`Added to ${n}`)}]));
       items.push(['New playlist…',()=>{closePlaylistMenu();openPlaylistDialog(id)}]);
       if(view!=='lib')items.push(['Remove from this playlist',()=>{pls[view]=pls[view].filter(x=>x!==id);savePls();render()}]);
