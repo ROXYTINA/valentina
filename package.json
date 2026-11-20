@@ -1,11 +1,14 @@
 {
   "name": "valentina",
   "productName": "Valentina",
+  "executableName": "Valentina",
+  "electronDist": "node_modules/electron/dist",
   "version": "1.0.0",
   "description": "A free local music player with synced lyrics",
   "main": "main.js",
   "author": "You",
   "license": "MIT",
+  "electronDist": "node_modules/electron/dist",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder"
@@ -15,10 +18,11 @@
     "electron-builder": "^25.0.0"
   },
   "build": {
-    "appId": "com.example.valentina",
+    "appId": "com.roxytina.valentina",
     "productName": "Valentina",
     "files": ["main.js", "preload.js", "index.html", "package.json", "assets/**/*"],
-    "win": { "target": "nsis", "icon": "assets/logo.png" },
+    "extraResources": [{ "from": "songs", "to": "songs" }],
+    "win": { "target": "nsis", "icon": "assets/logo.png", "artifactName": "Valentina-${version}-Setup.${ext}" },
     "mac": { "target": "dmg", "category": "public.app-category.music", "icon": "assets/logo.png" },
     "linux": { "target": "AppImage", "category": "Audio", "icon": "assets/logo.png" }
   }

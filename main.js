@@ -2,6 +2,11 @@ const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// Identifies this app in Windows media controls and notifications.
+const APP_ID = 'com.roxytina.valentina';
+app.setName('Valentina');
+app.setAppUserModelId(APP_ID);
+
 // Setup file logging
 const logFile = path.join(app.getPath('userData'), 'app.log');
 const logStream = fs.createWriteStream(logFile, { flags: 'a' });
@@ -16,7 +21,7 @@ log('--- App Start ---');
 
 // Songs folder: put audio files (and optional .lrc/.txt lyrics with the same name) here
 const songsDir = () => {
-  const dir = app.isPackaged ? path.join(path.dirname(process.execPath), 'songs') : path.join(__dirname, 'songs');
+  const dir = app.isPackaged ? path.join(process.resourcesPath, 'songs') : path.join(__dirname, 'songs');
   log('[DEBUG_LOG] app.isPackaged:', app.isPackaged);
   log('[DEBUG_LOG] Resolved songsDir:', dir);
   return dir;
@@ -120,6 +125,14 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
+  win.setTitle('Valentina');
+  if (process.platform === 'win32' && typeof win.setAppDetails === 'function') {
+    win.setAppDetails({
+      appId: APP_ID,
+      appIconPath: path.join(__dirname, 'assets', 'logo.png'),
+      relaunchDisplayName: 'Valentina'
+    });
+  }
   Menu.setApplicationMenu(null);
   win.loadFile(path.join(__dirname, 'index.html'));
   // Open any external link in the normal browser
