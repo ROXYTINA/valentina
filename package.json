@@ -22,7 +22,7 @@
     "productName": "Valentina",
     "files": ["main.js", "preload.js", "index.html", "package.json", "assets/**/*"],
     "extraResources": [{ "from": "songs", "to": "songs" }],
-    "win": { "target": "nsis", "icon": "assets/logo.png", "artifactName": "Valentina-${version}-Setup.${ext}" },
+    "win": { "target": "nsis", "icon": "assets/logo.ico", "artifactName": "Valentina-${version}-Setup.${ext}" },
     "mac": { "target": "dmg", "category": "public.app-category.music", "icon": "assets/logo.png" },
     "linux": { "target": "AppImage", "category": "Audio", "icon": "assets/logo.png" }
   }

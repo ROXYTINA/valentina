@@ -205,7 +205,14 @@
   /* ---------- storage (IndexedDB keeps your songs between sessions) ---------- */
   const D=window.desktop; // set by the desktop app's preload script
   let saveT;
-  function saveLib(){clearTimeout(saveT);saveT=setTimeout(()=>D.save({tracks:tracks.map(({blob,...r})=>r),pls}),50)}
+  function flushLib(){
+    try{
+      const data=JSON.parse(JSON.stringify({tracks:tracks.map(({blob,...r})=>r),pls}));
+      return D.save(data).catch(e=>log('Library save failed:',String(e)));
+    }catch(e){log('Library save failed:',String(e))}
+  }
+  function saveLib(){clearTimeout(saveT);saveT=setTimeout(flushLib,50)}
+  addEventListener('beforeunload',()=>{if(D&&saveT){clearTimeout(saveT);flushLib()}});
   let db;
   const idb=new Promise(r=>{try{const o=indexedDB.open('pulse',1);o.onupgradeneeded=()=>o.result.createObjectStore('t',{keyPath:'id'});o.onsuccess=()=>r(o.result);o.onerror=()=>r(null)}catch(e){r(null)}});
   const tx=async(m,f)=>{if(D){if(m==='readwrite')saveLib();return}db=db||await idb;if(!db)return;return new Promise(r=>{const s=db.transaction('t',m).objectStore('t'),q=f(s);q.onsuccess=()=>r(q.result);q.onerror=()=>r()})};
@@ -300,7 +307,7 @@
     let h=`<div class="head"><h1>${isPl?esc(view):'Your library'}<small>${l.length} song${l.length==1?'':'s'}${total?' · '+Math.round(total/60)+' min':''}</small></h1>
   <input type="search" id="q" placeholder="Search songs or artists" value="${esc(q)}" aria-label="Search">
   ${l.length?'<button class="btn" id="playAll">Play</button>':''}
-  ${isPl?'<button class="btn alt" id="delPl">Delete playlist</button>':'<button class="btn alt" id="newPlMain">New playlist</button><button class="btn alt" id="addF">Add songs</button><button class="btn alt" id="addD">Add folder</button>'+(D?'<button class="btn alt" id="openS">Songs folder</button><button class="btn alt" id="showLogs">Show logs</button>':'')}</div>`;
+  ${isPl?'<button class="btn alt" id="delPl">Delete playlist</button>':'<button class="btn alt" id="newPlMain">New playlist</button><button class="btn alt" id="addF">Add songs</button>'+(D?'<button class="btn alt" id="showLogs">Show logs</button>':'')}</div>`;
     if(!l.length){
       h+=isPl&&!q?`<div class="empty"><b>This playlist is empty</b>Use the ⋯ button on any song in your library to add it here.</div>`
               :q?`<div class="empty"><b>No matches</b>Try a different search.</div>`
@@ -375,6 +382,13 @@
     log('[DEBUG_LOG] Audio element error:', au.error);
     toast('Cannot play this file. It may have been moved or deleted.');
   };
+  let lastPosSync=0;
+  const syncPosition=()=>{
+    if(!('mediaSession' in navigator)||!isFinite(au.duration)||au.duration<=0)return;
+    try{navigator.mediaSession.setPositionState({duration:au.duration,playbackRate:au.playbackRate||1,position:Math.min(au.currentTime,au.duration)})}catch(e){}
+  };
+  au.addEventListener('timeupdate',()=>{const n=Date.now();if(n-lastPosSync>1000){lastPosSync=n;syncPosition()}});
+  ['durationchange','seeked','play','pause','ratechange'].forEach(ev=>au.addEventListener(ev,syncPosition));
   au.onloadedmetadata=()=> {
     log('[DEBUG_LOG] Audio metadata loaded, dur:', au.duration);
     $('#dur').textContent=fmt(au.duration);
@@ -390,6 +404,7 @@
   if('mediaSession' in navigator){
     navigator.mediaSession.setActionHandler('play',()=>{if(au.paused)au.play().catch(()=>{})});
     navigator.mediaSession.setActionHandler('pause',()=>{if(!au.paused)au.pause()});
+    navigator.mediaSession.setActionHandler('seekto',d=>{if(isFinite(au.duration)&&d.seekTime!=null)au.currentTime=d.seekTime});
     navigator.mediaSession.setActionHandler('nexttrack',()=>step(1));
     navigator.mediaSession.setActionHandler('previoustrack',()=>step(-1));
   }

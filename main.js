@@ -120,7 +120,7 @@ function createWindow() {
     minWidth: 720,
     minHeight: 520,
     title: 'Valentina',
-    icon: path.join(__dirname, 'assets', 'logo.png'),
+    icon: path.join(__dirname, 'assets', 'logo.ico'),
     backgroundColor: '#171021',
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
@@ -129,7 +129,7 @@ function createWindow() {
   if (process.platform === 'win32' && typeof win.setAppDetails === 'function') {
     win.setAppDetails({
       appId: APP_ID,
-      appIconPath: path.join(__dirname, 'assets', 'logo.png'),
+      appIconPath: path.join(__dirname, 'assets', 'logo.ico'),
       relaunchDisplayName: 'Valentina'
     });
   }
@@ -139,7 +139,26 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 
+// Windows shows "Unknown app" in the media overlay unless the AppUserModelID is tied to a
+// Start Menu shortcut. Installed builds get one from the installer; for dev runs, make our own.
+function ensureStartMenuShortcut() {
+  if (process.platform !== 'win32') return;
+  try {
+    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Valentina.lnk');
+    shell.writeShortcutLink(lnk, fs.existsSync(lnk) ? 'update' : 'create', {
+      target: process.execPath,
+      args: app.isPackaged ? '' : `"${app.getAppPath()}"`,
+      cwd: path.dirname(process.execPath),
+      icon: path.join(__dirname, 'assets', 'logo.ico'),
+      iconIndex: 0,
+      description: 'Valentina',
+      appUserModelId: APP_ID
+    });
+  } catch (e) { log('Shortcut error:', e.message); }
+}
+
 app.whenReady().then(() => {
+  ensureStartMenuShortcut();
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
